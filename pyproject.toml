@@ -31,10 +31,10 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/hacchiroku/nonebot-plugin-bilibili-live-notify"
-Repository = "https://github.com/hacchiroku/nonebot-plugin-bilibili-live-notify"
-Documentation = "https://github.com/hacchiroku/nonebot-plugin-bilibili-live-notify#readme"
-Issues = "https://github.com/hacchiroku/nonebot-plugin-bilibili-live-notify/issues"
+Homepage = "https://github.com/ArisaTaki/nonebot-plugin-bilibili-live-notify"
+Repository = "https://github.com/ArisaTaki/nonebot-plugin-bilibili-live-notify"
+Documentation = "https://github.com/ArisaTaki/nonebot-plugin-bilibili-live-notify#readme"
+Issues = "https://github.com/ArisaTaki/nonebot-plugin-bilibili-live-notify/issues"
 
 [project.optional-dependencies]
 test = [
