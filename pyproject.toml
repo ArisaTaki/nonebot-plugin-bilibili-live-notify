@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nonebot-plugin-bilibili-live-notify"
-version = "0.1.0"
+version = "0.1.1"
 description = "NoneBot2 plugin for subscribing and notifying Bilibili live room status."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,7 +21,6 @@ dependencies = [
 ]
 keywords = ["nonebot", "nonebot2", "bilibili", "live", "plugin"]
 classifiers = [
-  "Framework :: NoneBot",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
