@@ -54,7 +54,6 @@ BILIBILI_LIVE_NOTIFY_PROXY_URL=http://127.0.0.1:8000/bilibili/live?room_id={room
 BILIBILI_LIVE_NOTIFY_CHECK_INTERVAL=20
 BILIBILI_LIVE_NOTIFY_REQUEST_TIMEOUT=10
 BILIBILI_LIVE_NOTIFY_STARTUP_CHECK_DELAY=3
-BILIBILI_LIVE_NOTIFY_DATA_FILE=data/bilibili_live_notify/subscriptions.json
 BILIBILI_LIVE_NOTIFY_SOURCE=proxy
 BILIBILI_LIVE_NOTIFY_PROXY_URL=http://127.0.0.1:8000/bilibili/live?room_id={room_id}
 BILIBILI_LIVE_NOTIFY_API_BASE=https://api.live.bilibili.com
@@ -63,7 +62,7 @@ BILIBILI_LIVE_NOTIFY_API_BASE=https://api.live.bilibili.com
 - `BILIBILI_LIVE_NOTIFY_CHECK_INTERVAL`: 轮询间隔，默认 `20`
 - `BILIBILI_LIVE_NOTIFY_REQUEST_TIMEOUT`: HTTP 请求超时，默认 `10`
 - `BILIBILI_LIVE_NOTIFY_STARTUP_CHECK_DELAY`: 启动后首次检查前等待时间，默认 `3`
-- `BILIBILI_LIVE_NOTIFY_DATA_FILE`: 数据存储文件路径
+- `BILIBILI_LIVE_NOTIFY_DATA_FILE`: 可选，自定义数据文件路径；默认由 `nonebot-plugin-localstore` 管理
 - `BILIBILI_LIVE_NOTIFY_SOURCE`: 数据来源，支持 `proxy`、`api`、`auto`，默认 `proxy`
 - `BILIBILI_LIVE_NOTIFY_PROXY_URL`: 代理服务地址模板，需包含 `{room_id}`
 - `BILIBILI_LIVE_NOTIFY_API_BASE`: 官方接口基础地址，仅 `api` 或 `auto` 模式使用

@@ -27,6 +27,7 @@ except ValueError:
     commands = None
     watcher = None
 else:
+    require("nonebot_plugin_localstore")
     require("nonebot_plugin_apscheduler")
     from . import commands as commands
     from . import watcher as watcher

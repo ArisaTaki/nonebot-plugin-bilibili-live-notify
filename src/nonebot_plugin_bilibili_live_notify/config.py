@@ -11,7 +11,7 @@ class Config(BaseModel):
     bilibili_live_notify_check_interval: int = Field(default=20, ge=5)
     bilibili_live_notify_request_timeout: float = Field(default=10.0, gt=0)
     bilibili_live_notify_startup_check_delay: float = Field(default=3.0, ge=0)
-    bilibili_live_notify_data_file: str = "data/bilibili_live_notify/subscriptions.json"
+    bilibili_live_notify_data_file: str | None = None
     bilibili_live_notify_source: str = "proxy"
     bilibili_live_notify_api_base: str = "https://api.live.bilibili.com"
     bilibili_live_notify_proxy_url: str = (
@@ -31,7 +31,9 @@ class Config(BaseModel):
         return self.bilibili_live_notify_startup_check_delay
 
     @property
-    def data_file(self) -> Path:
+    def data_file(self) -> Path | None:
+        if not self.bilibili_live_notify_data_file:
+            return None
         return Path(self.bilibili_live_notify_data_file).expanduser()
 
     @property
