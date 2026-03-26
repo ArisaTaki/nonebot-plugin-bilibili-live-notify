@@ -34,13 +34,27 @@ class Store:
     def __init__(self, path: Path) -> None:
         self.path = path
         self.subs = Subscriptions()
-        self._ensure_dirs()
+        self.storage_available = self._ensure_dirs()
         self.load()
 
-    def _ensure_dirs(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+    def _ensure_dirs(self) -> bool:
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logger.warning(
+                f"[bilibili_live_notify] failed to prepare store dir {self.path.parent}: {e}"
+            )
+            return False
+        return True
 
     def load(self) -> None:
+        if not self.storage_available:
+            logger.warning(
+                "[bilibili_live_notify] storage unavailable, use in-memory subscriptions"
+            )
+            self.subs = Subscriptions()
+            return
+
         if not self.path.exists():
             logger.info("[bilibili_live_notify] no subscriptions file, start fresh")
             self.subs = Subscriptions()
@@ -55,6 +69,11 @@ class Store:
             self.subs = Subscriptions()
 
     def save(self) -> None:
+        if not self.storage_available:
+            logger.warning(
+                "[bilibili_live_notify] skip saving because storage is unavailable"
+            )
+            return
         try:
             payload = json.dumps(self._to_dict(), ensure_ascii=False, indent=2)
             self.path.write_text(payload, encoding="utf-8")

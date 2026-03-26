@@ -143,7 +143,6 @@ async def check_all_rooms() -> None:
     "interval",
     seconds=plugin_config.check_interval,
     id="bilibili_live_notify_check",
-    replace_existing=True,
 )
 async def live_check_job() -> None:
     await check_all_rooms()
