@@ -33,14 +33,14 @@ plugins = ["nonebot_plugin_bilibili_live_notify"]
 uvicorn main:app --app-dir bilibili-proxy --host 127.0.0.1 --port 8000
 ```
 
-2. 在 NoneBot 配置中添加：
+1. 在 NoneBot 配置中添加：
 
 ```env
 BILIBILI_LIVE_NOTIFY_SOURCE=proxy
 BILIBILI_LIVE_NOTIFY_PROXY_URL=http://127.0.0.1:8000/bilibili/live?room_id={room_id}
 ```
 
-3. 在群内使用：
+1. 在群内使用：
 
 ```text
 订阅直播 711308 狂肝无尽狂潮
@@ -95,21 +95,6 @@ BILIBILI_LIVE_NOTIFY_API_BASE=https://api.live.bilibili.com
 - `取消参与直播 <房间号|备注>`
 - `直播订阅列表`
 - `我参与的直播`
-
-## 测试
-
-```bash
-pip install -e ".[test]"
-pytest -q
-```
-
-## 发布
-
-```bash
-python -m build
-```
-
-发布到 NoneBot 插件商店前，建议先完成 PyPI 发布，并确认 README 已写清代理依赖和必要配置项。
 
 ## License
 
