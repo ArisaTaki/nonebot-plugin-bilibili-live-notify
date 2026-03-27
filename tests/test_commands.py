@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import tempfile
+
 import nonebot
 import pytest
 from nonebot.adapters.onebot.v11 import Adapter, Bot, GroupMessageEvent, Message
@@ -28,6 +30,8 @@ def make_group_event(message: str, *, user_id: int, group_id: int) -> GroupMessa
 async def test_subscribe_and_list(app: App):
     from nonebot_plugin_bilibili_live_notify.commands import list_cmd, sub_cmd
 
+    export_file = f"{tempfile.gettempdir()}/generated_bilibili_live_bots.json"
+
     async with app.test_matcher(sub_cmd) as ctx:
         bot = ctx.create_bot(
             base=Bot,
@@ -38,7 +42,7 @@ async def test_subscribe_and_list(app: App):
         ctx.receive_event(bot, event)
         ctx.should_call_send(
             event,
-            "已订阅直播 12345\n备注：测试主播\n该直播已加入本群监听，如需提醒请使用「参与直播」",
+            f"已订阅直播 12345\n备注：测试主播\n该直播已加入本群监听，如需提醒请使用「参与直播」\n该房间已加入待监听列表。\n当前没有可用的 bilibili-live Web Bot，无法自动补挂监听\n插件已自动刷新导出配置文件。\n文件：{export_file}\n若希望下次重启后继续生效，请将该文件内容同步到 BILIBILI_LIVE_BOTS\n当前进程未能立即补挂监听，但导出配置已准备好",
             result=None,
             bot=bot,
         )

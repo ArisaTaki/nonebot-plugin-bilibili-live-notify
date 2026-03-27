@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -68,7 +69,7 @@ class Store:
             logger.error(f"[bilibili_live_notify] failed to load store: {e}")
             self.subs = Subscriptions()
 
-    def save(self) -> None:
+    async def save(self) -> None:
         if not self.storage_available:
             logger.warning(
                 "[bilibili_live_notify] skip saving because storage is unavailable"
@@ -76,7 +77,7 @@ class Store:
             return
         try:
             payload = json.dumps(self._to_dict(), ensure_ascii=False, indent=2)
-            self.path.write_text(payload, encoding="utf-8")
+            await asyncio.to_thread(self.path.write_text, payload, encoding="utf-8")
         except Exception as e:
             logger.error(f"[bilibili_live_notify] failed to save store: {e}")
 
@@ -121,7 +122,7 @@ class Store:
             if room.remark == remark
         ]
 
-    def subscribe_group(
+    async def subscribe_group(
         self,
         room_id: int,
         remark: str,
@@ -138,9 +139,9 @@ class Store:
         if group_id not in room.groups:
             room.groups[group_id] = GroupSub(creator=creator_id)
 
-        self.save()
+        await self.save()
 
-    def unsubscribe_group(self, room_id: int, group_id: int) -> bool:
+    async def unsubscribe_group(self, room_id: int, group_id: int) -> bool:
         room = self.subs.rooms.get(room_id)
         if room is None or group_id not in room.groups:
             return False
@@ -148,19 +149,19 @@ class Store:
         room.groups.pop(group_id, None)
         if not room.groups:
             self.subs.rooms.pop(room_id, None)
-        self.save()
+        await self.save()
         return True
 
-    def rename_room(self, room_id: int, remark: str) -> bool:
+    async def rename_room(self, room_id: int, remark: str) -> bool:
         room = self.subs.rooms.get(room_id)
         if room is None:
             return False
 
         room.remark = remark
-        self.save()
+        await self.save()
         return True
 
-    def add_participant(self, room_id: int, group_id: int, user_id: int) -> bool:
+    async def add_participant(self, room_id: int, group_id: int, user_id: int) -> bool:
         room = self.subs.rooms.get(room_id)
         if room is None:
             return False
@@ -170,10 +171,10 @@ class Store:
             return False
 
         group.ensure_participant(user_id)
-        self.save()
+        await self.save()
         return True
 
-    def remove_participant(self, room_id: int, group_id: int, user_id: int) -> bool:
+    async def remove_participant(self, room_id: int, group_id: int, user_id: int) -> bool:
         room = self.subs.rooms.get(room_id)
         if room is None:
             return False
@@ -183,5 +184,5 @@ class Store:
             return False
 
         group.participants.remove(user_id)
-        self.save()
+        await self.save()
         return True

@@ -1,11 +1,21 @@
 from __future__ import annotations
 
+import asyncio
+import json
+
 from nonebot import on_command
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, Message, MessageSegment
 from nonebot.adapters.onebot.v11.permission import GROUP_ADMIN, GROUP_OWNER
 from nonebot.permission import SUPERUSER
 
-from .runtime import store
+from .adapter_state import (
+    dump_cookie,
+    is_room_monitored,
+    iter_web_live_bots,
+    resolve_monitored_room_id,
+    schedule_web_room_monitor,
+)
+from .runtime import export_path, managed_rooms, store
 
 ADMIN_PERMISSION = SUPERUSER | GROUP_ADMIN | GROUP_OWNER
 
@@ -21,7 +31,8 @@ def get_group_rooms(group_id: int):
 def match_rooms(group_rooms, keyword: str):
     if keyword.isdigit():
         room_id = int(keyword)
-        return [(rid, room) for rid, room in group_rooms if rid == room_id]
+        canonical_room_id = resolve_monitored_room_id(room_id) or room_id
+        return [(rid, room) for rid, room in group_rooms if rid == canonical_room_id]
     return [(rid, room) for rid, room in group_rooms if room.remark == keyword]
 
 
@@ -30,6 +41,45 @@ def build_choice_text(rooms):
         f"{index}. {room.remark}（{room_id}）"
         for index, (room_id, room) in enumerate(rooms, 1)
     )
+
+
+def build_adapter_config() -> list[dict[str, object]]:
+    managed_room_ids = managed_rooms.list()
+    web_bots = list(iter_web_live_bots())
+    if not web_bots:
+        return [
+            {
+                "cookie": "SESSDATA=请填入你的Cookie; bili_jct=请填入你的bili_jct;",
+                "room_ids": managed_room_ids,
+            }
+        ]
+
+    result: list[dict[str, object]] = []
+    for index, bot in enumerate(web_bots):
+        room_ids = sorted(
+            {
+                *[
+                    int(getattr(room, "room_id"))
+                    for room in getattr(bot, "rooms", {}).values()
+                    if getattr(room, "room_id", None) is not None
+                ],
+                *(managed_room_ids if index == 0 else []),
+            }
+        )
+        result.append(
+            {
+                "cookie": dump_cookie(bot.cookie),
+                "room_ids": room_ids,
+            }
+        )
+    return result
+
+
+async def write_adapter_config() -> None:
+    config_data = build_adapter_config()
+    export_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(config_data, ensure_ascii=False, indent=2)
+    await asyncio.to_thread(export_path.write_text, payload, encoding="utf-8")
 
 
 help_cmd = on_command(
@@ -49,6 +99,9 @@ async def _handle_help():
         "订阅直播 <房间号> [备注]\n"
         "取消订阅直播 <房间号|备注>\n"
         "备注直播 <房间号|旧备注> <新备注>\n"
+        "直播监听列表\n"
+        "更新直播监听配置\n"
+        "导出直播监听配置\n"
         "\n【群成员】\n"
         "参与直播 <房间号|备注>\n"
         "取消参与直播 <房间号|备注>\n"
@@ -73,21 +126,40 @@ async def _handle_subscribe(event: GroupMessageEvent):
     if len(args) < 2 or not args[1].isdigit():
         await sub_cmd.finish("用法：订阅直播 <房间号> [备注]")
 
-    room_id = int(args[1])
+    input_room_id = int(args[1])
+    room_id = resolve_monitored_room_id(input_room_id) or input_room_id
     remark = args[2].strip() if len(args) >= 3 else str(room_id)
 
-    store.subscribe_group(
+    await store.subscribe_group(
         room_id=room_id,
         remark=remark,
         group_id=event.group_id,
         creator_id=event.user_id,
     )
 
-    await sub_cmd.finish(
+    reply = (
         f"已订阅直播 {room_id}\n"
         f"备注：{remark}\n"
         "该直播已加入本群监听，如需提醒请使用「参与直播」"
     )
+    if not is_room_monitored(room_id):
+        await managed_rooms.add(room_id)
+        ok, message = schedule_web_room_monitor(room_id)
+        await write_adapter_config()
+        reply += (
+            "\n该房间已加入待监听列表。"
+            f"\n{message}"
+            "\n插件已自动刷新导出配置文件。"
+            f"\n文件：{export_path}"
+            "\n若希望下次重启后继续生效，请将该文件内容同步到 BILIBILI_LIVE_BOTS"
+        )
+        if not ok:
+            reply += "\n当前进程未能立即补挂监听，但导出配置已准备好"
+    else:
+        await managed_rooms.remove(room_id)
+        await write_adapter_config()
+
+    await sub_cmd.finish(reply)
 
 
 unsub_cmd = on_command(
@@ -112,7 +184,10 @@ async def _handle_unsubscribe(event: GroupMessageEvent):
         await unsub_cmd.finish("找到多个直播：\n" + build_choice_text(matches))
 
     room_id, room = matches[0]
-    store.unsubscribe_group(room_id, event.group_id)
+    await store.unsubscribe_group(room_id, event.group_id)
+    if store.get_room(room_id) is None and not is_room_monitored(room_id):
+        await managed_rooms.remove(room_id)
+    await write_adapter_config()
     await unsub_cmd.finish(f"已取消订阅 {room.remark}")
 
 
@@ -139,7 +214,7 @@ async def _handle_remark(event: GroupMessageEvent):
 
     room_id, room = matches[0]
     old = room.remark
-    store.rename_room(room_id, args[2].strip())
+    await store.rename_room(room_id, args[2].strip())
     await remark_cmd.finish(f"已将备注从「{old}」修改为「{args[2].strip()}」")
 
 
@@ -160,7 +235,7 @@ async def _handle_join(event: GroupMessageEvent):
         await join_cmd.finish("找到多个直播：\n" + build_choice_text(matches))
 
     room_id, room = matches[0]
-    store.add_participant(room_id, event.group_id, event.user_id)
+    await store.add_participant(room_id, event.group_id, event.user_id)
     await join_cmd.finish(f"你将收到 {room.remark} 的直播提醒")
 
 
@@ -181,7 +256,7 @@ async def _handle_leave(event: GroupMessageEvent):
         await leave_cmd.finish("找到多个直播：\n" + build_choice_text(matches))
 
     room_id, room = matches[0]
-    ok = store.remove_participant(room_id, event.group_id, event.user_id)
+    ok = await store.remove_participant(room_id, event.group_id, event.user_id)
     if not ok:
         await leave_cmd.finish("你未参与该直播")
 
@@ -203,6 +278,83 @@ async def _handle_list(event: GroupMessageEvent):
         text += f"- {room.remark}（{room_id}，{count} 人参与）\n"
 
     await list_cmd.finish(text.rstrip())
+
+
+watch_list_cmd = on_command(
+    "直播监听列表",
+    permission=ADMIN_PERMISSION,
+    priority=5,
+    block=True,
+)
+
+
+@watch_list_cmd.handle()
+async def _handle_watch_list():
+    pending_rooms = [
+        room_id for room_id in managed_rooms.list() if not is_room_monitored(room_id)
+    ]
+    if not pending_rooms:
+        await watch_list_cmd.finish("当前没有待补充到 bilibili-live 适配器的房间")
+
+    text = "待补充到 bilibili-live 适配器的房间：\n"
+    for room_id in pending_rooms:
+        room = store.get_room(room_id)
+        name = room.remark if room is not None else str(room_id)
+        text += f"- {name}（{room_id}）\n"
+    await watch_list_cmd.finish(text.rstrip())
+
+
+refresh_watch_cmd = on_command(
+    "更新直播监听配置",
+    permission=ADMIN_PERMISSION,
+    priority=5,
+    block=True,
+)
+
+
+@refresh_watch_cmd.handle()
+async def _handle_refresh_watch():
+    pending_rooms = [
+        room_id for room_id in managed_rooms.list() if not is_room_monitored(room_id)
+    ]
+    if not pending_rooms:
+        await refresh_watch_cmd.finish("当前没有需要补挂到 bilibili-live 适配器的房间")
+
+    messages: list[str] = []
+    failed = False
+    for room_id in pending_rooms:
+        ok, message = schedule_web_room_monitor(room_id)
+        failed = failed or not ok
+        messages.append(f"- {message}")
+
+    suffix = (
+        "\n当前是运行时补挂，若希望下次重启后继续生效，"
+        "仍需执行「导出直播监听配置」并更新 BILIBILI_LIVE_BOTS"
+    )
+    if failed:
+        suffix = (
+            "\n部分房间未能自动补挂。"
+            "\n你仍可执行「导出直播监听配置」后重启机器人生效"
+        )
+    await refresh_watch_cmd.finish("监听补挂结果：\n" + "\n".join(messages) + suffix)
+
+
+export_cmd = on_command(
+    "导出直播监听配置",
+    permission=ADMIN_PERMISSION,
+    priority=5,
+    block=True,
+)
+
+
+@export_cmd.handle()
+async def _handle_export():
+    await write_adapter_config()
+    await export_cmd.finish(
+        "已导出适配器配置。\n"
+        f"文件：{export_path}\n"
+        "请将该文件内容复制到 BILIBILI_LIVE_BOTS，并重启机器人生效"
+    )
 
 
 mine_cmd = on_command("我参与的直播", priority=5, block=True)
